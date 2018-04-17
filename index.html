@@ -1,49 +1,284 @@
 <!doctype html>
 <html>
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-		<title>reveal.js</title>
+        <title>reveal.js</title>
 
-		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+        <link rel="stylesheet" href="css/reveal.css">
+        <link rel="stylesheet" href="css/theme/black.css">
 
-		<!-- Theme used for syntax highlighting of code -->
-		<link rel="stylesheet" href="lib/css/zenburn.css">
+        <!-- Theme used for syntax highlighting of code -->
+        <link rel="stylesheet" href="lib/css/zenburn.css">
 
-		<!-- Printing and PDF exports -->
-		<script>
-			var link = document.createElement( 'link' );
-			link.rel = 'stylesheet';
-			link.type = 'text/css';
-			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
-			document.getElementsByTagName( 'head' )[0].appendChild( link );
-		</script>
-	</head>
-	<body>
-		<div class="reveal">
-			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
-			</div>
-		</div>
+        <!-- Printing and PDF exports -->
+        <script>
+            var link = document.createElement( 'link' );
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+            document.getElementsByTagName( 'head' )[0].appendChild( link );
+        </script>
+    </head>
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <section>Boost.Spirit</section>
 
-		<script src="lib/js/head.min.js"></script>
-		<script src="js/reveal.js"></script>
+                <section>
+                    <section>
+                        <h1>Chapter I. In which we are introduced to the Boost.Spirit</h1>
+                    </section>
+                    <section>
+                        <p>Check, if the string consists only from comma-separated doubles.</p>
+                        <pre><code class="hljs" data-trim>
+                            bool parse_numbers(Iterator first, Iterator last) {
+                                const bool r = phrase_parse(
+                                    first, last,
+                                    double_ &gt;&gt; *(',' &gt;&gt; double_));
+                                return (first == last) &amp;&amp;  // fail if not a full match
+                                       r;
+                            }
+                        </code></pre>
+                    </section>
+                </section>
 
-		<script>
-			// More info about config & dependencies:
-			// - https://github.com/hakimel/reveal.js#configuration
-			// - https://github.com/hakimel/reveal.js#dependencies
-			Reveal.initialize({
-				dependencies: [
-					{ src: 'plugin/markdown/marked.js' },
-					{ src: 'plugin/markdown/markdown.js' },
-					{ src: 'plugin/notes/notes.js', async: true },
-					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
-				]
-			});
-		</script>
-	</body>
+                <section>
+                    <section>
+                        <h1>Chapter II. In which Boost.Spirit tries to copy data.</h1>
+                    </section>
+                    <section>
+                        <p>Extract values from the string to local variables.</p>
+                        <pre><code data-trim>
+                            struct TwoDoubles {
+                                double d1, d2;
+                            } result;
+
+                            BOOST_FUSION_ADAPT_STRUCT(
+                                TwoDoubles,
+                                (double, d1) (double, d2) )
+
+                            qi::rule&lt;TwoDoubles()&gt; myRule =
+                                double_ &gt;&gt; ' ' &gt;&gt; double_;
+
+                            if (!qi::parse(first, last, start, result) || first != last)
+                                throw;
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h1>Chapter III. In which we are trying to customize behavior.</h1>
+                    </section>
+                    <section>
+                        <p>How to add some custom logic to the parsing?</p>
+                        <pre><code data-trim>
+                            std::vector&lt;double&gt; res;
+                            const auto appender = [&amp;res](double const&amp; d, qi::unused_type, qi::unused_type) {
+                                res.push_back(d);
+                            };
+
+                            if (!phrase_parse(first, last,
+                                double_[appender] >> *(',' >> double_[appender])) ||
+                                first != last) throw;
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h1>Chapter IV. In which we are applying the principle of incapsulation.</h1>
+                    </section>
+                    <section>
+                        <p>How to add more semantics to our parser?</p>
+                        <pre><code data-trim>
+                            struct digitparser : qi::grammar&lt;int()&gt; {
+                                digitparser() : digitparser::base_type(start) {
+                                    start = int_;
+                                }
+
+                                qi::rule&lt;int()&gt; start;
+                            };
+
+                            digitparser parser;
+                            int result;
+                            if (!qi::parse(first, last, parser, result) || first != last)
+                                throw;
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h1>Chapter V. A very short refresher on operator().</h1>
+                    </section>
+                    <section>
+                        <p>Semantic action could be a function or a functional-object.</p>
+                        <pre><code data-trim>
+                            struct print_action {
+                                void operator()(int i) const {
+                                    std::cout &lt;&lt; "Add my value to the parent parser called with args "
+                                    &lt;&lt; i &lt;&lt; std::endl;
+                                }
+                            };
+
+                            struct digitparser : qi::grammar&lt;int()&gt; {
+                                digitparser() : digitparser::base_type(start) {
+                                    print_action action;
+                                    start = int_[action];
+                                }
+
+                                qi::rule&lt;int()&gt; start;
+                            };
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h1>Chapter VII. In which we are surprised by the semantic action's
+                            signature.</h1>
+                    </section>
+                    <section>
+                        <p>Semantic action allows you to access parent's parser output value.</p>
+
+                        <pre><code data-trim>
+                            struct add_my_value_to_the_parent_parser {
+                                void operator()(
+                                    int i,                      /* parsed value */
+                                    boost::spirit::context&lt;     /* context */
+                                        boost::fusion::cons&lt;    /* context.attributes */
+                                            int&amp;,               /* context.attributes.car */
+                                            boost::fusion::nil_ /* context.attributes.cdr */
+                                        &gt;,
+                                        boost::fusion::vector&lt;&gt; /* tuple */
+                                    &gt;&amp; context,
+                                    bool&amp; success
+                                ) const {
+                                    context.attributes.car += i;
+                                }
+                            };
+                        </code></pre>
+                    </section>
+
+                    <section>
+                        <pre><code data-trim>
+                            struct digitparser : qi::grammar&lt;int()&gt; {
+                                digitparser() : digitparser::base_type(start) {
+                                    add_my_value_to_the_parent_parser action;
+                                    start = int_[action] &gt;&gt; "," &gt;&gt; int_[action];
+                                }
+
+                                qi::rule&lt;int()&gt; start;
+                            };
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h1>Chapter VII. In which we discover that parsers have internal state.</h1>
+                    </section>
+                    <section>
+                        <p>Semantic action allows you to access parent's
+                            parser internal variables. Let's create a parser that is valid only if the second integer is
+                            greater than the first one.</p>
+
+                        <pre><code data-trim>
+                            struct digitparser : qi::grammar&lt;int()&gt; {
+                              digitparser() : digitparser::base_type(start) {
+                                set_my_value_to_the_parent_parser_local action_set;
+                                compare_value_with_the_parent_parser_local action_compare;
+                                two_ints_parser =
+                                    int_[action_set] >> "," >> int_[action_compare];
+                                start = two_ints_parser;
+                              }
+
+                              qi::rule&lt;int()&gt; start;
+                              qi::rule&lt;int(), qi::locals&lt;int&gt;&gt; two_ints_parser;
+                            };
+                        </code></pre>
+                    </section>
+                    <section>
+                        <pre><code data-trim>
+                            struct set_my_value_to_the_parent_parser_local {
+                                void operator()(
+                                    int i,                      /* parsed value */
+                                    boost::spirit::context&lt;
+                                        boost::fusion::cons&lt;    /* context.attributes */
+                                            int&amp;,               /* context.attributes.car */
+                                            boost::fusion::nil_ /* context.attributes.cdr */
+                                        &gt;,
+                                        boost::fusion::vector&lt;int&gt; /* context.locals */
+                                    >&amp; context,
+                                    bool&amp; success
+                                ) const {
+                                    at_c&lt;0&gt;(context.locals) = i;
+                                }
+                            };
+                        </code></pre>
+                    </section>
+
+                    <section>
+                        <pre><code data-trim>
+                            struct compare_value_with_the_parent_parser_local {
+                                void operator()(
+                                    int i,                      /* parsed value */
+                                    boost::spirit::context&lt;
+                                        boost::fusion::cons&lt;    /* context.attributes */
+                                            int&amp;,               /* context.attributes.car */
+                                            boost::fusion::nil_ /* context.attributes.cdr */
+                                        &gt;,
+                                        boost::fusion::vector&lt;int&gt; /* context.locals */
+                                    >&amp; context,
+                                    bool&amp; success
+                                ) const {
+                                    const auto parent_local_value = at_c<0>(context.locals);
+                                    success = parent_local_value < i;
+                                }
+                            };
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <p>Pros</p>
+                    <ul>
+                        <li>Part of the Boost, it is probably already installed,</li>
+                        <li>Uses C++, no extra building step is required,</li>
+                        <li>Better than regexp in explaining why the parsing failed (but still
+                            not very adjustable),
+                        </li>
+                        <li>Improves your cognitive abilities.</li>
+                    </ul>
+                    <p>Cons</p>
+                    <ul>
+                        <li>Not as powerful as regular expressions (no backtracking),
+                            LL(inf)-only grammar,</li>
+                        <li>Slow compilation,</li>
+                        <li>Not a one-fits-all solution.</li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+
+        <script src="lib/js/head.min.js"></script>
+        <script src="js/reveal.js"></script>
+
+        <script>
+            // More info about config & dependencies:
+            // - https://github.com/hakimel/reveal.js#configuration
+            // - https://github.com/hakimel/reveal.js#dependencies
+            Reveal.initialize({
+                dependencies: [
+                    { src: 'plugin/markdown/marked.js' },
+                    { src: 'plugin/markdown/markdown.js' },
+                    { src: 'plugin/notes/notes.js', async: true },
+                    { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+                ]
+            });
+        </script>
+    </body>
 </html>
